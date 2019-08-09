@@ -7,7 +7,7 @@
   vars:
     tomcat_binary_loc: /app/tomcat/
     instances: 2
-    repsotory_loc: /home/xgzpqkon
+    repsotory_loc: /app/repo/
     package: apache-tomcat-8.0.26
     required_jre_version: 1.8.0
   tasks:
@@ -40,7 +40,7 @@
       mode: '0755'
   - name: Install tomcat
     unarchive:
-      src: '{{ repsotory_loc }}/{{ package }}.tar'
+      src: "{{ repsotory_loc }}/{{ package }}.tar"
       dest: '{{ tomcat_binary_loc }}'
       remote_src: yes
     when:
