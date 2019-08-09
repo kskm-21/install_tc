@@ -1,1 +1,59 @@
-
+--- # This playbook is to install tomcat using variables
+- hosts: localhost
+  gather_facts: no
+  become: yes
+  become_user: svctmcat
+  become_method: sudo
+  vars:
+    tomcat_binary_loc: /app/tomcat/
+    instances: 2
+    repsotory_loc: /home/xgzpqkon
+    package: apache-tomcat-8.0.26
+    required_jre_version: 1.8.0
+  tasks:
+  - name: Check file systems for /opt/app
+    shell: "df -h | grep /opt/app |wc -l"
+    register: opt_app
+  - name: Check file systems dynatrace
+    shell: "df -h | grep /opt/dynatrace |wc -l"
+    register: opt_dynatrace
+  - name: Check file systems for /app
+    shell: "df -h | grep ' /app' |wc -l"
+    register: app_dir
+  - name: Check the space on /app
+    shell: "df -h| grep ' /app' |awk '{ print $2}'"
+    register: app_space
+  - name: Check if java is installed
+    yum:
+      list: java
+    register: is_installed
+  - debug: msg="Java is available at required version"
+    when:
+      - "'1.8.0' in is_installed.results[0].name"
+      - "'openjdk' in is_installed.results[0].name"
+  - name: Create tomcat home dir
+    file:
+      path: '{{ tomcat_binary_loc }}'
+      state: directory
+      owner: svctmcat
+      group: domain_users
+      mode: '0755'
+  - name: Install tomcat
+    unarchive:
+      src: '{{ repsotory_loc }}/{{ package }}.tar'
+      dest: '{{ tomcat_binary_loc }}'
+    when:
+      - opt_app.stdout == "1"
+      - opt_dynatrace.stdout == "1"
+      - app_dir.stdout == "1"
+      - is_installed.results[0].yumstate == "installed"
+      - "'1.8.0' in is_installed.results[0].name"
+      - "'openjdk' in is_installed.results[0].name"
+    register: tc_install
+  - debug:
+      var: tc_install
+  - name: Copy tomcat directories to server instance files
+    copy:
+      src: "{{ tomcat_binary_loc }}/{{ package }}/"
+      dest: "{{ tomcat_binary_loc }}/server{{ item }}"
+    with_sequence: start=1 end="{{ instances }}"
