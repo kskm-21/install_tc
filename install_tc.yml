@@ -57,4 +57,5 @@
     copy:
       src: "{{ tomcat_binary_loc }}/{{ package }}/"
       dest: "{{ tomcat_binary_loc }}/server{{ item }}"
+      remote_src: yes
     with_sequence: start=1 end="{{ instances }}"
