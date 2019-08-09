@@ -1,5 +1,5 @@
 --- # This playbook is to install tomcat using variables
-- hosts: {{ play_host }}
+- hosts: '{{ play_host }}'
   gather_facts: no
   become: yes
   become_user: svctmcat
