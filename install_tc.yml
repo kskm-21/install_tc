@@ -70,6 +70,7 @@
     copy:
       src: "{{ tomcat_binary_loc }}/{{ package }}/"
       dest: "{{ tomcat_binary_loc }}/server{{ item }}"
+      remote_src: yes
     with_sequence: start=1 end="{{ instances }}"
   - name: Clean up instance directories
     shell: "rm -f {{ tomcat_binary_loc }}/server*/{{ item }}"
@@ -85,6 +86,7 @@
     copy:
       src: "{{ tomcat_binary_loc }}/install_workspace/TC_ctl_main"
       dest: "{{ tomcat_binary_loc }}/server{{ item }}/bin/"
+      remote_src: yes
     with_sequence: start=1 end="{{ instances }}"
   - name: Create startup file for each instance
     blockinfile:
