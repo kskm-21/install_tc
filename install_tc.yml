@@ -1,13 +1,13 @@
 --- # This playbook is to install tomcat using variables
-- hosts: '{{ play_host }}'
+- hosts: {{ play_host }}
   gather_facts: no
   become: yes
   become_user: svctmcat
   become_method: sudo
   vars:
-    tomcat_binary_loc: /app/tomcat/
+    tomcat_binary_loc: /app/tomcat
     instances: 2
-    repsotory_loc: /app/repo/
+    repsotory_loc: /home/xgzpqkon
     package: apache-tomcat-8.0.26
     required_jre_version: 1.8.0
   tasks:
@@ -31,23 +31,35 @@
     when:
       - "'1.8.0' in is_installed.results[0].name"
       - "'openjdk' in is_installed.results[0].name"
-  - name: Create tomcat home dir
+  - name: Create install workspace and tomcat home dir
     file:
-      path: '{{ tomcat_binary_loc }}'
+      path: '{{ item }}'
       state: directory
       owner: svctmcat
       group: domain_users
       mode: '0755'
+    with_items:
+      - '{{ tomcat_binary_loc }}'
+      - "{{ tomcat_binary_loc }}/install_workspace"
+      - "{{ tomcat_binary_loc }}/install_workspace/inst_bin"
+  - name: Get installation packages from repository
+    get_url:
+      url: "http://n01awl901/repository/{{ item }}"
+      dest: "{{ tomcat_binary_loc }}/install_workspace"
+      mode: '0755'
+    with_items:
+      - Tomcat_custom_files/TC_ctl_main
+      - "{{ package }}.tar"
   - name: Install tomcat
     unarchive:
-      src: "{{ repsotory_loc }}/{{ package }}.tar"
+      src: "{{ tomcat_binary_loc }}/install_workspace/{{ package }}.tar"
       dest: '{{ tomcat_binary_loc }}'
-      remote_src: yes
     when:
       - opt_app.stdout == "1"
       - opt_dynatrace.stdout == "1"
       - app_dir.stdout == "1"
       - is_installed.results[0].yumstate == "installed"
+#      - app_space == "50G"
       - "'1.8.0' in is_installed.results[0].name"
       - "'openjdk' in is_installed.results[0].name"
     register: tc_install
@@ -57,5 +69,59 @@
     copy:
       src: "{{ tomcat_binary_loc }}/{{ package }}/"
       dest: "{{ tomcat_binary_loc }}/server{{ item }}"
-      remote_src: yes
+    with_sequence: start=1 end="{{ instances }}"
+  - name: Clean up instance directories
+    shell: "rm -f {{ tomcat_binary_loc }}/server*/{{ item }}"
+    with_items:
+      - bin/*
+      - LICENSE
+      - NOTICE
+      - RELEASE-NOTES
+      - RUNNING.txt
+      - conf/tomcat-users.*
+      - conf/jaspic-providers.*
+  - name: Copy bin custom files to instance bin
+    copy:
+      src: "{{ tomcat_binary_loc }}/install_workspace/TC_ctl_main"
+      dest: "{{ tomcat_binary_loc }}/server{{ item }}/bin/"
+    with_sequence: start=1 end="{{ instances }}"
+  - name: Create startup file for each instance
+    blockinfile:
+      path: /app/tomcat/server{{ item }}/bin/startup.sh
+      block: |
+        #!/bin/sh
+        export JRE_HOME=/usr/lib/jvm/jre
+        export CATALINA_HOME=/app/tomcat/{{ package }}
+        export CATALINA_BASE=/app/tomcat/server{{ item }}
+        export CATALINA_PID=/app/tomcat/server{{ item }}/logs/tomcatserver{{ item }}.pid
+        export JAVA_OPTS="-Denv=/opt/app/cccm/properties/PERF -Djavax.net.ssl.trustStore=/opt/app/cccm/properties/PERF/perf.jks -Djavax.net.ssl.trustStorePassword=csaa123 $JAVA_OPTS"
+        export CATALINA_OPTS="-verbose:gc -Xms2g -Xmx2g -Xmn512m -XX:LargePageSizeInBytes=4m -XX:NativeMemoryTracking=summary -XX:+UseCompressedOops -XX:+UseConcMarkSweepGC -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:-PrintGCTimeStamps -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintTenuringDistribution -XX:HeapDumpPath=$CATALINA_BASE/logs/java_pid%p.hprof -XX:+HeapDumpOnOutOfMemoryError -Xloggc:/opt/app/logs/server2/gc.log-`date +%Y-%m-%d-%H-%M` -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=50 -XX:GCLogFileSize=100M -agentpath:/opt/dynatrace/dynatrace-6.5/agent/lib64/libdtagent.so=name=3CM_Perf_AppLJ_PrefMgmt01,server=n01apl4544.tent.trt.csaa.pri:9998"
+        exec $CATALINA_HOME/bin/startup.sh
+      create: yes
+      owner: svctmcat
+      group: domain_users
+      mode: '0755'
+    with_sequence: start=1 end="{{ instances }}"
+  - name: Create shutdown file for each instance
+    blockinfile:
+      path: /app/tomcat/server{{ item }}/bin/shutdown.sh
+      block: |
+        #!/bin/sh
+        echo "Stopping Tomcat Server"
+        PID=`ps -ef | grep "server{{ item }}" | grep java | awk '{print $2}'`
+        kill $PID
+        sleep 10
+        PID=`ps -ef | grep "server{{ item }}" | grep java | awk '{print $2}'`
+        if [ -n "$PID" ]; then
+        kill -9 $PID
+        echo "Process killed abruptly"
+        exit 0
+        else
+        echo "Process killed gracefully"
+        exit 0
+        fi
+      create: yes
+      owner: svctmcat
+      group: domain_users
+      mode: '0755'
     with_sequence: start=1 end="{{ instances }}"
