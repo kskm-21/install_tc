@@ -54,6 +54,7 @@
     unarchive:
       src: "{{ tomcat_binary_loc }}/install_workspace/{{ package }}.tar"
       dest: '{{ tomcat_binary_loc }}'
+      remote_src: yes
     when:
       - opt_app.stdout == "1"
       - opt_dynatrace.stdout == "1"
