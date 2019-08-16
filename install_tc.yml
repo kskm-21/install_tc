@@ -31,6 +31,9 @@
     when:
       - "'1.8.0' in is_installed.results[0].name"
       - "'openjdk' in is_installed.results[0].name"
+  - name: Check ulimit for user
+    shell: "ulimit -n"
+    register: limit
   - name: Create install workspace and tomcat home dir
     file:
       path: '{{ item }}'
@@ -63,6 +66,7 @@
 #      - app_space == "50G"
       - "'1.8.0' in is_installed.results[0].name"
       - "'openjdk' in is_installed.results[0].name"
+      - '"65536" in limit.stdout_lines'
     register: tc_install
   - debug:
       var: tc_install
@@ -127,4 +131,10 @@
       owner: svctmcat
       group: domain_users
       mode: '0755'
+    with_sequence: start=1 end="{{ instances }}"
+  - name: Copy tomcat-juli.jar into instances bin
+    copy:
+      src: "{{ tomcat_binary_loc }}/{{ package }}/bin/tomcat-juli.jar"
+      dest: "{{ tomcat_binary_loc }}/server{{ item }}/bin/"
+      remote_src: yes
     with_sequence: start=1 end="{{ instances }}"
