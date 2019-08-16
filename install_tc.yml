@@ -137,4 +137,9 @@
       src: "{{ tomcat_binary_loc }}/{{ package }}/bin/tomcat-juli.jar"
       dest: "{{ tomcat_binary_loc }}/server{{ item }}/bin/"
       remote_src: yes
-    with_sequence: start=1 end="{{ instances }}"
+    with_sequence: start=1 end="{{ instances }}"- name: Remove install workspace
+  - name: Remove install_worspace.
+    file:
+      path: "{{ tomcat_binary_loc }}/install_workspace"
+      state: absent
+      remote_src: yes
