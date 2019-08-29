@@ -1,0 +1,10 @@
+tomcat_binary_loc: /app/tomcat
+instances: 3
+svc_user: svctmcat
+repsotory_loc: /home/xgzpqkon
+package: apache-tomcat-8.5.37
+required_jre_version: 1.8.0
+default_http: 8080
+default_https: 8443
+default_ajp: 8009
+default_shutdown: 8005

@@ -1,0 +1,87 @@
+- name: Unzip template files
+  unarchive:
+    src: "{{ tomcat_binary_loc }}/install_workspace/tc_templates.zip"
+    dest: "{{ tomcat_binary_loc }}/install_workspace/"
+- name: Copy tomcat directories to server instance files
+  copy:
+    src: "{{ tomcat_binary_loc }}/{{ package }}/"
+    dest: "{{ tomcat_binary_loc }}/server{{ item }}"
+  with_sequence: start=1 end="{{ instances }}"
+- name: Clean up instance directories
+  shell: "rm -f {{ tomcat_binary_loc }}/server*/{{ item }}"
+  with_items:
+    - bin/*
+    - conf/*
+- name: Copy bin custom files to instance bin
+  copy:
+    src: "{{ tomcat_binary_loc }}/install_workspace/TC_ctl_main"
+    dest: "{{ tomcat_binary_loc }}/server{{ item }}/bin/"
+  with_sequence: start=1 end="{{ instances }}"
+- name: Create startup file for each instance
+  blockinfile:
+    path: /app/tomcat/server{{ item }}/bin/startup.sh
+    block: |
+      #!/bin/sh
+      export JRE_HOME=/usr/lib/jvm/jre
+      export CATALINA_HOME=/app/tomcat/{{ package }}
+      export CATALINA_BASE=/app/tomcat/server{{ item }}
+      export CATALINA_PID=/app/tomcat/server{{ item }}/logs/tomcatserver{{ item }}.pid
+      export JAVA_OPTS="$JAVA_OPTS"
+      export CATALINA_OPTS="-verbose:gc -Xms2g -Xmx2g -Xmn512m -XX:LargePageSizeInBytes=4m -XX:NativeMemoryTracking=summary -XX:+UseCompressedOops -XX:+UseConcMarkSweepGC -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:-PrintGCTimeStamps -XX:+PrintGCApplicationStoppedTime -XX:+PrintGCApplicationConcurrentTime -XX:+PrintTenuringDistribution -XX:HeapDumpPath=$CATALINA_BASE/logs/java_pid%p.hprof -XX:+HeapDumpOnOutOfMemoryError -Xloggc:/opt/app/logs/server{{ item }}/gc.log-`date +%Y-%m-%d-%H-%M` -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=50 -XX:GCLogFileSize=100M"
+      exec $CATALINA_HOME/bin/startup.sh
+    create: yes
+    owner: svctmcat
+    group: domain_users
+    mode: '0755'
+  with_sequence: start=1 end="{{ instances }}"
+- name: Create shutdown file for each instance
+  blockinfile:
+    path: /app/tomcat/server{{ item }}/bin/shutdown.sh
+    block: |
+      #!/bin/sh
+      echo "Stopping Tomcat Server"
+      PID=`ps -ef | grep "server{{ item }}" | grep java | awk '{print $2}'`
+      kill $PID
+      sleep 10
+      PID=`ps -ef | grep "server{{ item }}" | grep java | awk '{print $2}'`
+      if [ -n "$PID" ]; then
+      kill -9 $PID
+      echo "Process killed abruptly"
+      exit 0
+      else
+      echo "Process killed gracefully"
+      exit 0
+      fi
+    create: yes
+    owner: svctmcat
+    group: domain_users
+    mode: '0755'
+  with_sequence: start=1 end="{{ instances }}"
+- name: Copy tomcat-juli.jar into instances bin
+  copy:
+    src: "{{ tomcat_binary_loc }}/{{ package }}/bin/tomcat-juli.jar"
+    dest: "{{ tomcat_binary_loc }}/server{{ item }}/bin/"
+    remote_src: yes
+  with_sequence: start=1 end={{ instances }}
+- name: Create server.xml for each instances
+  include: server.yml
+  with_sequence: start=0 end={{ instances|int - 1 }}
+- name: Create logging.properties for each instance
+  template:
+    src: "{{ tomcat_binary_loc }}/install_workspace/logging.properties.j2"
+    dest: "/app/tomcat/server{{ item }}/conf/logging.properties"
+    owner: svctmcat
+    group: domain_users
+    mode: '0755'
+  with_sequence: start=1 end={{ instances }}
+- name: copy web.xml to instance directories
+  copy:
+    src: "{{ tomcat_binary_loc }}/install_workspace/web.xml"
+    dest: "{{ tomcat_binary_loc }}/server{{ item }}/conf/"
+    remote_src: yes
+  with_sequence: start=1 end={{ instances }}
+- name: Remove install workspace
+  file:
+    path: "{{ tomcat_binary_loc }}/install_workspace"
+    state: absent
+    remote_src: yes

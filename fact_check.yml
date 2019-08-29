@@ -1,0 +1,23 @@
+- name: Check file systems for /opt/app
+  shell: "df -h | grep /opt/app |wc -l"
+  register: opt_app
+- name: Check file systems dynatrace
+  shell: "df -h | grep /opt/dynatrace |wc -l"
+  register: opt_dynatrace
+- name: Check file systems for /app
+  shell: "df -h | grep ' /app' |wc -l"
+  register: app_dir
+- name: Check the space on /app
+  shell: "df -h| grep ' /app' |awk '{ print $2}'"
+  register: app_space
+- name: Check if java is installed
+  yum:
+    list: java
+  register: is_installed
+- debug: msg="Java is available at required version"
+  when:
+    - "'1.8.0' in is_installed.results[0].name"
+    - "'openjdk' in is_installed.results[0].name"
+- name: Check ulimit for user
+  shell: "ulimit -n"
+  register: limit

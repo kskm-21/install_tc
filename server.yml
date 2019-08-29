@@ -1,0 +1,19 @@
+- debug:
+    msg: "{{ default_http + item|int }}"
+  register: http_conn
+- debug:
+    msg: "{{ default_https + item|int }}"
+  register: https_conn
+- debug:
+    msg: "{{ default_ajp + item|int }}"
+  register: ajp_conn
+- debug:
+    msg: "{{ default_shutdown + item|int }}"
+  register: shutdown_conn
+- name: using plain.xml template
+  template:
+    src: "{{ tomcat_binary_loc }}/install_workspace/server.xml.j2"
+    dest: /app/tomcat/server{{ item|int + 1 }}/conf/server.xml
+    owner: svctmcat
+    group: domain_users
+    mode: '0755'

@@ -1,0 +1,183 @@
+#!/bin/sh
+#
+# <name here>   Start/Stop <application name here>
+#
+# chkconfig: 345 95 03
+# description: to start the Httpd agents
+# version: 1.3.3
+
+# Source function library.
+. /etc/init.d/functions
+
+# CONFIGURATION VARIABLES:
+# SCRIPT_USER     = user with which to run the *_SCRIPT commands
+# START_SCRIPT    = script to start the application
+# START_OPTS      = options to pass to START_SCRIPT at start time
+# STOP_SCRIPT     = script to stop the application
+# STOP_OPTS       = options to pass to STOP_SCRIPT at stop time
+# RESTART_SCRIPT  = script to restart the application, else just stop/start
+# RESTART_OPTS    = options to pass to RESTART_SCRIPT at restart time
+# STATUS_SCRIPT   = script to query application status
+# STATUS_OPTS     = options to pass to STATUS_SCRIPT when checking status
+# PID_FILE        = location of PID file to determine if app is running
+# PS_REGEXP       = regexp to egrep for in ps to determine if app is running
+#   !! NOTE: PID_FILE will be used in preference to PS_REGEXP !!
+#   !!       You *MUST* specify one of them!                  !!
+srvPath=""
+TOMCAT_HOME="/app/tomcat/"
+SCRIPT_USER="svctmcat"
+START_SCRIPT="/bin/startup.sh"
+STOP_SCRIPT="/bin/shutdown.sh"
+#PID_FILE=""
+PS_REGEXP="/usr/WebSphere/IBMHttpServer[0-9.]*/bin/httpd([[:space:]]|$)"
+
+# Do not modify these:
+subsys="${0##*/}"
+subsys="${subsys#[KS]??}"
+lockfile="/var/lock/subsys/${subsys}"
+
+#get_pids() {
+#       if [ -n "${PID_FILE}" ]; then
+#               # Use PID_FILE first if specified:
+#               checkpid `cat "${PID_FILE}" 2>/dev/null` && cat "${PID_FILE}"
+#       else
+#               # Else query processes for PS_REGEXP:
+#               ps -ef | egrep "${PS_REGEXP}" | grep -v grep | awk '{print $2}'
+#       fi
+#}
+
+start() {
+        echo -n $"Starting ${subsys}: "
+        # Verify SCRIPT_USER exists:
+        if [ -n "${SCRIPT_USER}" ] && \
+           ! getent passwd "${SCRIPT_USER}" >/dev/null 2>&1; then
+                echo -n $"Missing user ${SCRIPT_USER}"
+                failure $"Missing user ${SCRIPT_USER}"
+                echo
+                return 1
+        fi
+        # Verify START_SCRIPT exists (cannot check executable by another user):
+#        if [ ! -f "${START_SCRIPT}" ]; then
+#                echo -n $"Missing start script ${START_SCRIPT}"
+#                failure $"Missing start script ${START_SCRIPT}"
+#                echo
+#                return 1
+#        fi
+        # Check whether the application is already started:
+#       if [ -e "${lockfile}" -a -n "`get_pids`" ]; then
+#               echo -n $"cannot start ${subsys}: already running."
+#               failure $"cannot start ${subsys}: already running."
+#               echo
+#               return 1
+#       fi
+        # Run START_SCRIPT as SCRIPT_USER:
+        srv=$( serverList )
+        if [ -n "$1" ]; then
+                notExists="true"
+                for server in ${srv}
+                do
+	                if [ ${server} == "$1" ]; then
+        	        notExists="false"
+			srvPath=${server}
+       			daemon --user "${SCRIPT_USER}" "${TOMCAT_HOME}$srvPath${START_SCRIPT}"         	
+	                fi
+                done
+                if [ ${notExists} == "true" ]; then
+                        printf "Given server name $1 doesn't exists\n"
+                fi
+
+        else
+                for server in ${srv}
+                do
+        	        srvPath=${server} 
+                	daemon --user "${SCRIPT_USER}" "${TOMCAT_HOME}$srvPath${START_SCRIPT}"
+                done 
+
+        fi
+        retval=$?
+        echo
+        # Create subsys file if successful:
+        [ "${retval}" -eq 0 ] && touch "${lockfile}"
+        return ${retval}
+}
+
+stop() {
+        echo -n $"Shutting down ${subsys}: "
+        # Verify SCRIPT_USER exists:
+        if [ -n "${SCRIPT_USER}" ] && \
+           ! getent passwd "${SCRIPT_USER}" >/dev/null 2>&1; then
+                echo -n $"Missing user ${SCRIPT_USER}"
+                failure $"Missing user ${SCRIPT_USER}"
+                echo
+                return 1
+        fi
+        # Verify STOP_SCRIPT exists (cannot check executable by another user):
+#        if [ ! -f "${STOP_SCRIPT}" ]; then
+#                echo -n $"Missing stop script ${STOP_SCRIPT}"
+#                failure $"Missing stop script ${STOP_SCRIPT}"
+#                echo
+#                return 1
+#        fi
+        # Check that the application is running:
+#       if [ ! -e "${lockfile}" ]; then
+#               echo -n $"cannot stop ${subsys}: not running."
+#               failure $"cannot stop ${subsys}: not running."
+#               echo
+#               return 1
+#       fi
+        # Run STOP_SCRIPT with STOP_OPTS as SCRIPT_USER:
+        srv=$( serverList )
+        if [ -n "$1" ]; then
+                notExists="true"
+                for server in ${srv}
+                do
+	                if [ ${server} == "$1" ]; then
+        	        notExists="false"        
+			srvPath=${server}	
+			daemon --user "${SCRIPT_USER}" "${TOMCAT_HOME}$srvPath${STOP_SCRIPT}"
+               		fi
+                done
+                if [ ${notExists} == "true" ]; then
+                        printf "Given server name $1 doesn't exists\n"
+                fi
+
+        else
+                for server in ${srv}
+                do
+			srvPath=${server}
+			daemon --user "${SCRIPT_USER}" "${TOMCAT_HOME}$srvPath${STOP_SCRIPT}"
+                done
+        fi
+        retval=$?
+        echo
+        [ "${retval}" -eq 0 ] && rm -f "${lockfile}"
+        return ${retval}
+}
+serverList() {
+        servers=`ls /app/tomcat|grep server`
+        echo "${servers}"
+}
+
+# Check that either PID_FILE or PS_REGEXP is specified:
+#if [ -z "${PID_FILE}${PS_REGEXP}" ]; then
+#       echo -n $"Must set either PID_FILE or PS_REGEXP"
+#       failure $"Must set either PID_FILE or PS_REGEXP"
+#       echo
+#       exit 100
+#fi
+
+
+# Main body - parse arguments:
+case "$1" in
+    start)
+        start $2
+        ;;
+    stop)
+        stop $2
+        ;;
+    *)
+        echo $"Usage: ${subsys} {start|stop}"
+        exit 1
+esac
+
+exit $?
